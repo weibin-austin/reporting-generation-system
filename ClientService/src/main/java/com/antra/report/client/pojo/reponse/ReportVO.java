@@ -2,17 +2,15 @@ package com.antra.report.client.pojo.reponse;
 
 import com.antra.report.client.entity.ReportRequestEntity;
 import com.antra.report.client.entity.ReportStatus;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+@NoArgsConstructor
+@AllArgsConstructor
 public class ReportVO {
     private ReportRequestEntity entity;
-
-    public ReportVO() {}
-
-    public ReportVO(ReportRequestEntity entity) {
-        this.entity = entity;
-    }
 
     public String getSubmitter() {
         return entity.getSubmitter();

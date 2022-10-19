@@ -7,28 +7,15 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import lombok.Data;
 
 import java.io.IOException;
 
+@Data
 public class PDFSNSRequest {
     @JsonProperty("Message")
     @JsonDeserialize(using = SNSMessageDeserializer.class)
     PDFRequest pdfRequest;
-
-    public PDFRequest getPdfRequest() {
-        return pdfRequest;
-    }
-
-    public void setPdfRequest(PDFRequest pdfRequest) {
-        this.pdfRequest = pdfRequest;
-    }
-
-    @Override
-    public String toString() {
-        return "PDFSNSRequest{" +
-                "pdfRequest=" + pdfRequest +
-                '}';
-    }
 
 }
 class SNSMessageDeserializer extends JsonDeserializer<PDFRequest> {

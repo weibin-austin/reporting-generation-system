@@ -7,29 +7,19 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import lombok.Data;
 
 import java.io.IOException;
 
+@Data
 public class ExcelSNSRequest {
+
     @JsonProperty("Message")
     @JsonDeserialize(using = SNSMessageDeserializer.class)
     ExcelRequest excelRequest;
 
-    public ExcelRequest getExcelRequest() {
-        return excelRequest;
-    }
-
-    public void setExcelRequest(ExcelRequest excelRequest) {
-        this.excelRequest = excelRequest;
-    }
-
-    @Override
-    public String toString() {
-        return "ExcelSNSRequest{" +
-                "excelRequest=" + excelRequest +
-                '}';
-    }
 }
+
 class SNSMessageDeserializer extends JsonDeserializer<ExcelRequest> {
     @Override
     public ExcelRequest deserialize(JsonParser p, DeserializationContext ctxt)
