@@ -14,6 +14,7 @@ public class ReportRequestEntity {
     private String description;
     private LocalDateTime createdTime;
     private LocalDateTime updatedTime;
+    private boolean notificationSent;
 
     @OneToOne(cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, fetch = FetchType.EAGER) // default is already eager here
     @JoinColumn(name="pdf_report_id")
