@@ -46,7 +46,7 @@ public class ExcelServiceImpl implements ExcelService {
         ExcelData data = new ExcelData();
         data.setTitle(request.getDescription());
         data.setFileId(fileInfo.getFileId());
-        data.setSubmitter(fileInfo.getSubmitter());
+        data.setSubmitter(request.getSubmitter());
         if(multisheet){
             data.setSheets(generateMultiSheet(request));
         }else {

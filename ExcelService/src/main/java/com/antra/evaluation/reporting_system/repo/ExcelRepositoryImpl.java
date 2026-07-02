@@ -21,7 +21,8 @@ public class ExcelRepositoryImpl implements ExcelRepository {
 
     @Override
     public ExcelFile saveFile(ExcelFile file) {
-        return excelData.put(file.getFileId(), file);
+        excelData.put(file.getFileId(), file);
+        return file;
     }
 
     @Override

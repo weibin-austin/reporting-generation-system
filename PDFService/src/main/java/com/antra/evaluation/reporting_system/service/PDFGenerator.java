@@ -10,11 +10,12 @@ import net.sf.jasperreports.engine.JasperPrint;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
-import org.springframework.util.ResourceUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,9 +38,10 @@ public class PDFGenerator {
         List<Object> itemList = List.of("Empty");
         JRBeanCollectionDataSource dataSource = new JRBeanCollectionDataSource(itemList);
 
-        try {
-            File jaspFile = ResourceUtils.getFile("classpath:Coffee_Landscape.jasper");
-            JasperPrint jprint = JasperFillManager.fillReport(jaspFile.getAbsolutePath(), parameters, dataSource);
+        // Load the template as a stream: ResourceUtils.getFile() cannot open
+        // classpath resources when running from a packaged jar.
+        try (InputStream jaspStream = new ClassPathResource("Coffee_Landscape.jasper").getInputStream()) {
+            JasperPrint jprint = JasperFillManager.fillReport(jaspStream, parameters, dataSource);
             File temp = File.createTempFile(request.getSubmitter(),"_tmp.pdf");
             JasperExportManager.exportReportToPdfFile(jprint, temp.getAbsolutePath());
             PDFFile generatedFile = new PDFFile();
