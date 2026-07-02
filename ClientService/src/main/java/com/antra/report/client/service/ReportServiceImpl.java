@@ -137,7 +137,7 @@ public class ReportServiceImpl implements ReportService {
         entity.setUpdatedTime(LocalDateTime.now());
         reportRequestRepo.save(entity);
         String to = "youremail@gmail.com";
-        emailService.sendEmail(to, EmailType.SUCCESS, entity.getSubmitter());
+        emailService.sendEmail(to, response.isFailed() ? EmailType.FAILURE : EmailType.SUCCESS, entity.getSubmitter());
     }
 
     @Override
@@ -157,7 +157,7 @@ public class ReportServiceImpl implements ReportService {
         entity.setUpdatedTime(LocalDateTime.now());
         reportRequestRepo.save(entity);
         String to = "youremail@gmail.com";
-        emailService.sendEmail(to, EmailType.SUCCESS, entity.getSubmitter());
+        emailService.sendEmail(to, response.isFailed() ? EmailType.FAILURE : EmailType.SUCCESS, entity.getSubmitter());
     }
 
     @Override

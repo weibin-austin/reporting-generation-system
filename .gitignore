@@ -2,3 +2,10 @@
 /ClientService/target/
 /ExcelService/target/
 /PDFService/target/
+
+# IDE
+.idea/
+
+# Runtime artifacts: service logs and Excel files generated into the working directory
+*.log
+*.xlsx

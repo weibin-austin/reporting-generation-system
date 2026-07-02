@@ -12,7 +12,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
-import java.io.FileInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 
 import static io.restassured.module.mockmvc.RestAssuredMockMvc.given;
@@ -30,7 +30,7 @@ public class APITest {
 
     @Test
     public void testFileDownload() throws FileNotFoundException {
-        Mockito.when(excelService.getExcelBodyById(anyString())).thenReturn(new FileInputStream("temp.xlsx"));
+        Mockito.when(excelService.getExcelBodyById(anyString())).thenReturn(new ByteArrayInputStream("fake excel content".getBytes()));
         given().accept("application/json").get("/excel/123abcd/content").peek().
                 then().assertThat()
                 .statusCode(200);
