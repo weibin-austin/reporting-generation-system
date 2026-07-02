@@ -17,6 +17,7 @@ import com.antra.report.client.repository.ReportRequestRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +35,9 @@ import java.util.stream.Collectors;
 @Service
 public class ReportServiceImpl implements ReportService {
     private static final Logger log = LoggerFactory.getLogger(ReportServiceImpl.class);
+
+    @Value("${app.notification.to:youremail@gmail.com}")
+    private String notificationRecipient;
 
     private final ReportRequestRepo reportRequestRepo;
     private final SNSService snsService;
@@ -136,8 +140,7 @@ public class ReportServiceImpl implements ReportService {
         }
         entity.setUpdatedTime(LocalDateTime.now());
         reportRequestRepo.save(entity);
-        String to = "youremail@gmail.com";
-        emailService.sendEmail(to, response.isFailed() ? EmailType.FAILURE : EmailType.SUCCESS, entity.getSubmitter());
+        sendNotificationWhenComplete(entity.getReqId());
     }
 
     @Override
@@ -156,8 +159,23 @@ public class ReportServiceImpl implements ReportService {
         }
         entity.setUpdatedTime(LocalDateTime.now());
         reportRequestRepo.save(entity);
-        String to = "youremail@gmail.com";
-        emailService.sendEmail(to, response.isFailed() ? EmailType.FAILURE : EmailType.SUCCESS, entity.getSubmitter());
+        sendNotificationWhenComplete(entity.getReqId());
+    }
+
+    // One email per request: fires only once both the PDF and Excel legs have
+    // reached a terminal status. Synchronized so the two SQS listener threads
+    // can't both pass the notificationSent check.
+    private synchronized void sendNotificationWhenComplete(String reqId) {
+        ReportRequestEntity entity = reportRequestRepo.findById(reqId).orElseThrow(RequestNotFoundException::new);
+        ReportStatus pdfStatus = entity.getPdfReport().getStatus();
+        ReportStatus excelStatus = entity.getExcelReport().getStatus();
+        if (pdfStatus == ReportStatus.PENDING || excelStatus == ReportStatus.PENDING || entity.isNotificationSent()) {
+            return;
+        }
+        boolean failed = pdfStatus == ReportStatus.FAILED || excelStatus == ReportStatus.FAILED;
+        emailService.sendEmail(notificationRecipient, failed ? EmailType.FAILURE : EmailType.SUCCESS, entity.getSubmitter());
+        entity.setNotificationSent(true);
+        reportRequestRepo.save(entity);
     }
 
     @Override
