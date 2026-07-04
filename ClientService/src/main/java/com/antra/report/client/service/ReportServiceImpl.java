@@ -25,11 +25,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import javax.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,16 +43,31 @@ public class ReportServiceImpl implements ReportService {
     @Value("${app.notification.to:youremail@gmail.com}")
     private String notificationRecipient;
 
+    @Value("${app.service.excel.url:http://localhost:8888/excel}")
+    private String excelServiceUrl;
+
+    @Value("${app.service.pdf.url:http://localhost:9999/pdf}")
+    private String pdfServiceUrl;
+
     private final ReportRequestRepo reportRequestRepo;
     private final SNSService snsService;
     private final AmazonS3 s3Client;
     private final EmailService emailService;
+    private final RestTemplate restTemplate;
+    // One thread per downstream service so a sync request fans out to both at once
+    private final ExecutorService directRequestExecutor = Executors.newFixedThreadPool(2);
 
-    public ReportServiceImpl(ReportRequestRepo reportRequestRepo, SNSService snsService, AmazonS3 s3Client, EmailService emailService) {
+    public ReportServiceImpl(ReportRequestRepo reportRequestRepo, SNSService snsService, AmazonS3 s3Client, EmailService emailService, RestTemplate restTemplate) {
         this.reportRequestRepo = reportRequestRepo;
         this.snsService = snsService;
         this.s3Client = s3Client;
         this.emailService = emailService;
+        this.restTemplate = restTemplate;
+    }
+
+    @PreDestroy
+    public void shutdownExecutor() {
+        directRequestExecutor.shutdown();
     }
 
     private ReportRequestEntity persistToLocal(ReportRequest request) {
@@ -79,29 +98,34 @@ public class ReportServiceImpl implements ReportService {
         sendDirectRequests(request);
         return new ReportVO(reportRequestRepo.findById(request.getReqId()).orElseThrow());
     }
-    //TODO:Change to parallel process using Threadpool? CompletableFuture?
+    // Both downstream services are called concurrently; the sync API latency is
+    // max(excel, pdf) instead of their sum.
     private void sendDirectRequests(ReportRequest request) {
-        RestTemplate rs = new RestTemplate();
-        ExcelResponse excelResponse = new ExcelResponse();
-        PDFResponse pdfResponse = new PDFResponse();
-        try {
-            excelResponse = rs.postForEntity("http://localhost:8888/excel", request, ExcelResponse.class).getBody();
-        } catch(Exception e){
-            log.error("Excel Generation Error (Sync) : e", e);
-            excelResponse.setReqId(request.getReqId());
-            excelResponse.setFailed(true);
-        } finally {
-            updateLocal(excelResponse);
-        }
-        try {
-            pdfResponse = rs.postForEntity("http://localhost:9999/pdf", request, PDFResponse.class).getBody();
-        } catch(Exception e){
-            log.error("PDF Generation Error (Sync) : e", e);
-            pdfResponse.setReqId(request.getReqId());
-            pdfResponse.setFailed(true);
-        } finally {
-            updateLocal(pdfResponse);
-        }
+        CompletableFuture<Void> excelDone = CompletableFuture.runAsync(() -> {
+            ExcelResponse excelResponse = new ExcelResponse();
+            try {
+                excelResponse = restTemplate.postForEntity(excelServiceUrl, request, ExcelResponse.class).getBody();
+            } catch (Exception e) {
+                log.error("Excel Generation Error (Sync) : e", e);
+                excelResponse.setReqId(request.getReqId());
+                excelResponse.setFailed(true);
+            } finally {
+                updateLocal(excelResponse);
+            }
+        }, directRequestExecutor);
+        CompletableFuture<Void> pdfDone = CompletableFuture.runAsync(() -> {
+            PDFResponse pdfResponse = new PDFResponse();
+            try {
+                pdfResponse = restTemplate.postForEntity(pdfServiceUrl, request, PDFResponse.class).getBody();
+            } catch (Exception e) {
+                log.error("PDF Generation Error (Sync) : e", e);
+                pdfResponse.setReqId(request.getReqId());
+                pdfResponse.setFailed(true);
+            } finally {
+                updateLocal(pdfResponse);
+            }
+        }, directRequestExecutor);
+        CompletableFuture.allOf(excelDone, pdfDone).join();
     }
 
     private void updateLocal(ExcelResponse excelResponse) {
@@ -200,9 +224,7 @@ public class ReportServiceImpl implements ReportService {
 //            } catch (FileNotFoundException e) {
 //                log.error("No file found", e);
 //            }
-            RestTemplate restTemplate = new RestTemplate();
-//            InputStream is = restTemplate.execute(, HttpMethod.GET, null, ClientHttpResponse::getBody, fileId);
-            ResponseEntity<Resource> exchange = restTemplate.exchange("http://localhost:8888/excel/{id}/content",
+            ResponseEntity<Resource> exchange = restTemplate.exchange(excelServiceUrl + "/{id}/content",
                     HttpMethod.GET, null, Resource.class, fileId);
             try {
                 return exchange.getBody().getInputStream();
