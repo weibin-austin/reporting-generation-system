@@ -1,7 +1,49 @@
+function authToken() {
+    return localStorage.getItem('reporting_jwt');
+}
+function authHeader() {
+    const t = authToken();
+    return t ? { Authorization: 'Bearer ' + t } : {};
+}
+function showLoggedIn(loggedIn) {
+    $('#login_row').toggle(!loggedIn);
+    $('#app_controls').toggle(loggedIn);
+    if (!loggedIn) {
+        $('#report_list_body').html('');
+    }
+}
+function login() {
+    const username = $('#login_username').val();
+    const password = $('#login_password').val();
+    $.ajax({
+        url: '/auth/login',
+        type: 'POST',
+        data: JSON.stringify({ username: username, password: password }),
+        contentType: 'application/json',
+        dataType: 'json',
+        success: function (data) {
+            localStorage.setItem('reporting_jwt', data.token);
+            $('#login_status').text('');
+            showLoggedIn(true);
+            loadAll();
+        },
+        error: function () {
+            $('#login_status').addClass('text-danger').text('Invalid username or password');
+        }
+    });
+}
+function logout() {
+    localStorage.removeItem('reporting_jwt');
+    showLoggedIn(false);
+}
 function loadAll() {
     $("#report_list_body").html("");
 
-    $.getJSON('/report',
+    $.ajax({
+        url: '/report',
+        headers: authHeader(),
+        dataType: 'json'
+    }).done(
         function (data, textStatus, jqXHR) {  // success callback
             console.info(data);
             data.data.forEach((report, index)=>{
@@ -24,10 +66,14 @@ function loadAll() {
                 );
             });
 
-        },function(e){
-            alert('error' + e.error);
         }
-    );
+    ).fail(function (jqXHR) {
+        if (jqXHR.status === 401) {
+            logout();
+        } else {
+            alert('Error loading reports');
+        }
+    });
 }
 function formatTime(time) {
     if(!time){
@@ -48,6 +94,10 @@ function downloadExcel(reqId){
 function downloadFile(urlToSend) {
     var req = new XMLHttpRequest();
     req.open("GET", urlToSend, true);
+    var token = authToken();
+    if (token) {
+        req.setRequestHeader("Authorization", "Bearer " + token);
+    }
     req.responseType = "blob";
     req.onload = function (event) {
         console.info(event);
@@ -91,6 +141,7 @@ function submit(async) {
     $.ajax({
         url : async?"report/async":"report/sync",
         type: "POST",
+        headers: authHeader(),
         data : JSON.stringify(data),
         contentType: "application/json",
         dataType: "json",
@@ -101,14 +152,25 @@ function submit(async) {
             loadAll();
         },
         error: function (jqXHR, textStatus, errorThrown) {
-            alert(jqXHR.responseJSON.message);
+            if (jqXHR.status === 401) {
+                logout();
+                return;
+            }
+            alert(jqXHR.responseJSON ? jqXHR.responseJSON.message : 'Request failed');
             console.error(jqXHR);
             console.error(jqXHR.responseJSON.message);
         }
     });
 }
 $( document ).ready(function() {
-    loadAll();
+    if (authToken()) {
+        showLoggedIn(true);
+        loadAll();
+    } else {
+        showLoggedIn(false);
+    }
+    $("#loginBtn").on("click", login);
+    $("#logoutBtn").on("click", logout);
     $("#loadAllBtn").on("click",function () {
         loadAll();
     });

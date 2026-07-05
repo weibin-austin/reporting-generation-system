@@ -14,10 +14,21 @@
     Javascript and reload this page!</h2></noscript>
 
 <div id="main-content" class="container">
-    <div class="row">
+    <div id="login_row" class="row mb-3">
+        <div class="col-md-12">
+            <form class="form-inline" onsubmit="return false;">
+                <input id="login_username" class="form-control mr-2" placeholder="username" value="admin">
+                <input id="login_password" type="password" class="form-control mr-2" placeholder="password" value="password">
+                <button id="loginBtn" class="btn btn-primary">Login</button>
+                <span id="login_status" class="ml-3 text-muted"></span>
+            </form>
+        </div>
+    </div>
+    <div id="app_controls" class="row" style="display: none;">
         <div class="col-md-10">
             <button id="loadAllBtn" class="btn btn-success loat-right ml-1" type="submit">Refresh All Data</button>
             <button id="generateBtn" class="btn btn-info float-right ml-1" type="submit">Generate Report</button>
+            <button id="logoutBtn" class="btn btn-outline-secondary float-right ml-1" type="submit">Logout</button>
         </div>
     </div>
     <div class="row">
