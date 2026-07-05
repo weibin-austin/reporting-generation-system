@@ -3,7 +3,7 @@ package com.antra.report.client.service;
 import com.antra.report.client.pojo.EmailType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cloud.aws.messaging.core.QueueMessagingTemplate;
+import io.awspring.cloud.messaging.core.QueueMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
