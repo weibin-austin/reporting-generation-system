@@ -4,6 +4,7 @@ import com.antra.report.client.pojo.reponse.SqsResponse;
 import com.antra.report.client.service.ReportService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cloud.aws.messaging.listener.SqsMessageDeletionPolicy;
 import org.springframework.cloud.aws.messaging.listener.annotation.SqsListener;
 import org.springframework.stereotype.Component;
 
@@ -18,17 +19,17 @@ public class ReportSQSListener {
         this.reportService = reportService;
     }
 
-    @SqsListener("PDF_Response_Queue")
+    // ON_SUCCESS + a redrive policy on the queue: failed updates (DB hiccup etc.)
+    // are redelivered by SQS and land in the response DLQ after maxReceiveCount.
+    @SqsListener(value = "PDF_Response_Queue", deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
     public void responseQueueListenerPdf(SqsResponse response) {
         log.info("Get response from sqs : {}", response);
-        //queueListener(request.getPdfRequest());
         reportService.updateAsyncPDFReport(response);
     }
 
-    @SqsListener("Excel_Response_Queue")
+    @SqsListener(value = "Excel_Response_Queue", deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
     public void responseQueueListenerExcel(SqsResponse response) {
         log.info("Get response from sqs : {}", response);
-        //queueListener(request.getPdfRequest());
         reportService.updateAsyncExcelReport(response);
     }
 

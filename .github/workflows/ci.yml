@@ -40,20 +40,7 @@ jobs:
           cache: maven
 
       - name: Create AWS resources in LocalStack
-        run: |
-          aws --endpoint-url $LOCALSTACK sns create-topic --name reporting_topic
-          for q in Excel_Request_Queue PDF_Request_Queue Excel_Response_Queue PDF_Response_Queue email_queue Email_Queue; do
-            aws --endpoint-url $LOCALSTACK sqs create-queue --queue-name $q
-          done
-          aws --endpoint-url $LOCALSTACK s3 mb s3://reporting-generated-file
-          aws --endpoint-url $LOCALSTACK sns subscribe \
-            --topic-arn arn:aws:sns:us-east-1:000000000000:reporting_topic \
-            --protocol sqs \
-            --notification-endpoint arn:aws:sqs:us-east-1:000000000000:Excel_Request_Queue
-          aws --endpoint-url $LOCALSTACK sns subscribe \
-            --topic-arn arn:aws:sns:us-east-1:000000000000:reporting_topic \
-            --protocol sqs \
-            --notification-endpoint arn:aws:sqs:us-east-1:000000000000:PDF_Request_Queue
+        run: AWS_ENDPOINT=$LOCALSTACK ./scripts/setup_localstack.sh
 
       - name: Build and test
         run: mvn -B clean verify
