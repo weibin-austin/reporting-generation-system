@@ -1,5 +1,6 @@
 package com.antra.evaluation.reporting_system.service;
 
+import com.antra.evaluation.reporting_system.exception.FileGenerationException;
 import com.antra.evaluation.reporting_system.pojo.report.ExcelData;
 import com.antra.evaluation.reporting_system.pojo.report.ExcelDataHeader;
 import com.antra.evaluation.reporting_system.pojo.report.ExcelDataSheet;
@@ -29,19 +30,21 @@ import java.util.List;
 @Service
 public class ExcelGenerationServiceImpl implements ExcelGenerationService {
 
+    // Invalid input is a business failure, not a transient one: FileGenerationException
+    // marks it non-retryable so queue listeners reply "failed" instead of redelivering.
     private void validateDate(ExcelData data) {
         if (data.getSheets().size() < 1) {
-            throw new RuntimeException("Excel Data Error: no sheet is defined");
+            throw new FileGenerationException("Excel Data Error: no sheet is defined");
         }
         for (ExcelDataSheet sheet : data.getSheets()) {
             if (StringUtils.isEmpty(sheet.getTitle())) {
-                throw new RuntimeException("Excel Data Error: sheet title is missing");
+                throw new FileGenerationException("Excel Data Error: sheet title is missing");
             }
             if(sheet.getHeaders() != null) {
                 int columns = sheet.getHeaders().size();
                 for (List<Object> dataRow : sheet.getDataRows()) {
                     if (dataRow.size() != columns) {
-                        throw new RuntimeException("Excel Data Error: sheet data has difference length than header number");
+                        throw new FileGenerationException("Excel Data Error: sheet data has difference length than header number");
                     }
                 }
             }
