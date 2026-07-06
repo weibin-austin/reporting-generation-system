@@ -24,7 +24,8 @@ for q in email_queue Email_Queue; do
 done
 
 echo "Creating pipeline queues with DLQs (maxReceiveCount=$MAX_RECEIVE_COUNT)"
-for q in Excel_Request_Queue PDF_Request_Queue Excel_Response_Queue PDF_Response_Queue; do
+for q in Excel_Request_Queue PDF_Request_Queue Image_Request_Queue \
+         Excel_Response_Queue PDF_Response_Queue Image_Response_Queue; do
   awsq sqs create-queue --queue-name "${q}_DLQ" > /dev/null
   awsq sqs create-queue --queue-name "$q" > /dev/null
   QUEUE_URL=$(awsq sqs get-queue-url --queue-name "$q" --query QueueUrl --output text)
@@ -36,14 +37,16 @@ done
 echo "Creating S3 bucket"
 awsq s3 mb "s3://reporting-generated-file" 2>/dev/null || true
 
-echo "Creating DynamoDB table PDFFile"
-awsq dynamodb create-table --table-name PDFFile \
-  --attribute-definitions AttributeName=id,AttributeType=S \
-  --key-schema AttributeName=id,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST > /dev/null 2>&1 || true
+echo "Creating DynamoDB tables PDFFile, ImageFile"
+for t in PDFFile ImageFile; do
+  awsq dynamodb create-table --table-name "$t" \
+    --attribute-definitions AttributeName=id,AttributeType=S \
+    --key-schema AttributeName=id,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST > /dev/null 2>&1 || true
+done
 
 echo "Subscribing request queues to the topic"
-for q in Excel_Request_Queue PDF_Request_Queue; do
+for q in Excel_Request_Queue PDF_Request_Queue Image_Request_Queue; do
   awsq sns subscribe \
     --topic-arn "arn:aws:sns:${REGION}:${ACCOUNT_ID}:reporting_topic" \
     --protocol sqs \

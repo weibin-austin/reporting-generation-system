@@ -40,11 +40,19 @@ public class ReportVO {
         return entity.getExcelReport().getStatus();
     }
 
+    public ReportStatus getImageReportStatus() {
+        return entity.getImageReport() == null ? null : entity.getImageReport().getStatus();
+    }
+
     public LocalDateTime getPdfReportUpdatedTime() {
         return entity.getPdfReport().getUpdatedTime();
     }
 
     public LocalDateTime getExcelReportUpdatedTime() {
         return entity.getExcelReport().getUpdatedTime();
+    }
+
+    public LocalDateTime getImageReportUpdatedTime() {
+        return entity.getImageReport() == null ? null : entity.getImageReport().getUpdatedTime();
     }
 }

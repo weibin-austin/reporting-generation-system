@@ -62,6 +62,9 @@ public class ReportController {
         } else if (type == FileType.EXCEL) {
             fileType = "application/vnd.ms-excel";
             fileName = "report.xls";
+        } else if (type == FileType.IMAGE) {
+            fileType = "image/png";
+            fileName = "report.png";
         }
         response.setHeader("Content-Type", fileType);
         response.setHeader("fileName", fileName);

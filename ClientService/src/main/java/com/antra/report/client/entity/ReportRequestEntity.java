@@ -22,4 +22,7 @@ public class ReportRequestEntity {
     @OneToOne(cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, fetch = FetchType.EAGER) // default is already eager here
     @JoinColumn(name="excel_report_id")
     private ExcelReportEntity excelReport;
+    @OneToOne(cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, fetch = FetchType.EAGER)
+    @JoinColumn(name="image_report_id")
+    private ImageReportEntity imageReport;
 }

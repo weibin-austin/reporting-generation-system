@@ -2,6 +2,7 @@ package com.antra.report.client.service;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.antra.report.client.entity.ExcelReportEntity;
+import com.antra.report.client.entity.ImageReportEntity;
 import com.antra.report.client.entity.PDFReportEntity;
 import com.antra.report.client.entity.ReportRequestEntity;
 import com.antra.report.client.entity.ReportStatus;
@@ -9,6 +10,7 @@ import com.antra.report.client.exception.RequestNotFoundException;
 import com.antra.report.client.pojo.EmailType;
 import com.antra.report.client.pojo.FileType;
 import com.antra.report.client.pojo.reponse.ExcelResponse;
+import com.antra.report.client.pojo.reponse.ImageResponse;
 import com.antra.report.client.pojo.reponse.PDFResponse;
 import com.antra.report.client.pojo.reponse.ReportVO;
 import com.antra.report.client.pojo.reponse.SqsResponse;
@@ -49,13 +51,16 @@ public class ReportServiceImpl implements ReportService {
     @Value("${app.service.pdf.url:http://localhost:9999/pdf}")
     private String pdfServiceUrl;
 
+    @Value("${app.service.image.url:http://localhost:7777/image}")
+    private String imageServiceUrl;
+
     private final ReportRequestRepo reportRequestRepo;
     private final SNSService snsService;
     private final AmazonS3 s3Client;
     private final EmailService emailService;
     private final RestTemplate restTemplate;
-    // One thread per downstream service so a sync request fans out to both at once
-    private final ExecutorService directRequestExecutor = Executors.newFixedThreadPool(2);
+    // One thread per downstream service so a sync request fans out to all at once
+    private final ExecutorService directRequestExecutor = Executors.newFixedThreadPool(3);
 
     public ReportServiceImpl(ReportRequestRepo reportRequestRepo, SNSService snsService, AmazonS3 s3Client, EmailService emailService, RestTemplate restTemplate) {
         this.reportRequestRepo = reportRequestRepo;
@@ -88,6 +93,10 @@ public class ReportServiceImpl implements ReportService {
         ExcelReportEntity excelReport = new ExcelReportEntity();
         BeanUtils.copyProperties(pdfReport, excelReport);
         entity.setExcelReport(excelReport);
+
+        ImageReportEntity imageReport = new ImageReportEntity();
+        BeanUtils.copyProperties(pdfReport, imageReport);
+        entity.setImageReport(imageReport);
 
         return reportRequestRepo.save(entity);
     }
@@ -125,7 +134,19 @@ public class ReportServiceImpl implements ReportService {
                 updateLocal(pdfResponse);
             }
         }, directRequestExecutor);
-        CompletableFuture.allOf(excelDone, pdfDone).join();
+        CompletableFuture<Void> imageDone = CompletableFuture.runAsync(() -> {
+            ImageResponse imageResponse = new ImageResponse();
+            try {
+                imageResponse = restTemplate.postForEntity(imageServiceUrl, request, ImageResponse.class).getBody();
+            } catch (Exception e) {
+                log.error("Image Generation Error (Sync) : e", e);
+                imageResponse.setReqId(request.getReqId());
+                imageResponse.setFailed(true);
+            } finally {
+                updateLocal(imageResponse);
+            }
+        }, directRequestExecutor);
+        CompletableFuture.allOf(excelDone, pdfDone, imageDone).join();
     }
 
     private void updateLocal(ExcelResponse excelResponse) {
@@ -137,6 +158,11 @@ public class ReportServiceImpl implements ReportService {
         SqsResponse response = new SqsResponse();
         BeanUtils.copyProperties(pdfResponse, response);
         updateAsyncPDFReport(response);
+    }
+    private void updateLocal(ImageResponse imageResponse) {
+        SqsResponse response = new SqsResponse();
+        BeanUtils.copyProperties(imageResponse, response);
+        updateAsyncImageReport(response);
     }
 
     @Override
@@ -186,17 +212,38 @@ public class ReportServiceImpl implements ReportService {
         sendNotificationWhenComplete(entity.getReqId());
     }
 
-    // One email per request: fires only once both the PDF and Excel legs have
-    // reached a terminal status. Synchronized so the two SQS listener threads
+    @Override
+    public void updateAsyncImageReport(SqsResponse response) {
+        ReportRequestEntity entity = reportRequestRepo.findById(response.getReqId()).orElseThrow(RequestNotFoundException::new);
+        var imageReport = entity.getImageReport();
+        imageReport.setUpdatedTime(LocalDateTime.now());
+        if (response.isFailed()) {
+            imageReport.setStatus(ReportStatus.FAILED);
+        } else {
+            imageReport.setStatus(ReportStatus.COMPLETED);
+            imageReport.setFileId(response.getFileId());
+            imageReport.setFileLocation(response.getFileLocation());
+            imageReport.setFileSize(response.getFileSize());
+        }
+        entity.setUpdatedTime(LocalDateTime.now());
+        reportRequestRepo.save(entity);
+        sendNotificationWhenComplete(entity.getReqId());
+    }
+
+    // One email per request: fires only once the PDF, Excel and Image legs have
+    // all reached a terminal status. Synchronized so the SQS listener threads
     // can't both pass the notificationSent check.
     private synchronized void sendNotificationWhenComplete(String reqId) {
         ReportRequestEntity entity = reportRequestRepo.findById(reqId).orElseThrow(RequestNotFoundException::new);
         ReportStatus pdfStatus = entity.getPdfReport().getStatus();
         ReportStatus excelStatus = entity.getExcelReport().getStatus();
-        if (pdfStatus == ReportStatus.PENDING || excelStatus == ReportStatus.PENDING || entity.isNotificationSent()) {
+        ReportStatus imageStatus = entity.getImageReport() == null ? ReportStatus.COMPLETED : entity.getImageReport().getStatus();
+        if (pdfStatus == ReportStatus.PENDING || excelStatus == ReportStatus.PENDING
+                || imageStatus == ReportStatus.PENDING || entity.isNotificationSent()) {
             return;
         }
-        boolean failed = pdfStatus == ReportStatus.FAILED || excelStatus == ReportStatus.FAILED;
+        boolean failed = pdfStatus == ReportStatus.FAILED || excelStatus == ReportStatus.FAILED
+                || imageStatus == ReportStatus.FAILED;
         emailService.sendEmail(notificationRecipient, failed ? EmailType.FAILURE : EmailType.SUCCESS, entity.getSubmitter());
         entity.setNotificationSent(true);
         reportRequestRepo.save(entity);
@@ -213,6 +260,11 @@ public class ReportServiceImpl implements ReportService {
         ReportRequestEntity entity = reportRequestRepo.findById(reqId).orElseThrow(RequestNotFoundException::new);
         if (type == FileType.PDF) {
             String fileLocation = entity.getPdfReport().getFileLocation(); // this location is s3 "bucket/key"
+            String bucket = fileLocation.split("/")[0];
+            String key = fileLocation.split("/")[1];
+            return s3Client.getObject(bucket, key).getObjectContent();
+        } else if (type == FileType.IMAGE) {
+            String fileLocation = entity.getImageReport().getFileLocation(); // s3 "bucket/key"
             String bucket = fileLocation.split("/")[0];
             String key = fileLocation.split("/")[1];
             return s3Client.getObject(bucket, key).getObjectContent();

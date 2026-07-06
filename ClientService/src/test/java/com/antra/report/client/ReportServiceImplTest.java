@@ -6,6 +6,7 @@ import com.antra.report.client.entity.ReportStatus;
 import com.antra.report.client.exception.RequestNotFoundException;
 import com.antra.report.client.pojo.EmailType;
 import com.antra.report.client.pojo.reponse.ExcelResponse;
+import com.antra.report.client.pojo.reponse.ImageResponse;
 import com.antra.report.client.pojo.reponse.PDFResponse;
 import com.antra.report.client.pojo.reponse.SqsResponse;
 import com.antra.report.client.pojo.request.ReportRequest;
@@ -45,6 +46,7 @@ public class ReportServiceImplTest {
 
     private static final String EXCEL_URL = "http://excel-service/excel";
     private static final String PDF_URL = "http://pdf-service/pdf";
+    private static final String IMAGE_URL = "http://image-service/image";
     private static final String RECIPIENT = "austin.sun89@gmail.com";
 
     @Mock
@@ -67,6 +69,7 @@ public class ReportServiceImplTest {
         ReflectionTestUtils.setField(service, "notificationRecipient", RECIPIENT);
         ReflectionTestUtils.setField(service, "excelServiceUrl", EXCEL_URL);
         ReflectionTestUtils.setField(service, "pdfServiceUrl", PDF_URL);
+        ReflectionTestUtils.setField(service, "imageServiceUrl", IMAGE_URL);
         // back the mocked repository with a map so saves are visible to later reads
         lenient().when(reportRequestRepo.save(any(ReportRequestEntity.class))).thenAnswer(inv -> {
             ReportRequestEntity entity = inv.getArgument(0);
@@ -110,10 +113,30 @@ public class ReportServiceImplTest {
         });
     }
 
+    private void stubImageSuccess() {
+        when(restTemplate.postForEntity(eq(IMAGE_URL), any(), eq(ImageResponse.class))).thenAnswer(inv -> {
+            ReportRequest req = inv.getArgument(1);
+            ImageResponse response = new ImageResponse();
+            response.setReqId(req.getReqId());
+            response.setFileId("image-file-1");
+            response.setFileLocation("bucket/image-file-1");
+            response.setFileSize(300L);
+            return ResponseEntity.ok(response);
+        });
+    }
+
+    private SqsResponse sqs(String reqId, String fileId) {
+        SqsResponse r = new SqsResponse();
+        r.setReqId(reqId);
+        r.setFileId(fileId);
+        return r;
+    }
+
     @Test
-    public void syncGenerationCallsBothServicesAndSendsOneSuccessEmail() {
+    public void syncGenerationCallsAllThreeServicesAndSendsOneSuccessEmail() {
         stubExcelSuccess();
         stubPdfSuccess();
+        stubImageSuccess();
         ReportRequest request = sampleRequest();
 
         service.generateReportsSync(request);
@@ -122,16 +145,18 @@ public class ReportServiceImplTest {
         assertNotNull(entity);
         assertEquals(ReportStatus.COMPLETED, entity.getExcelReport().getStatus());
         assertEquals(ReportStatus.COMPLETED, entity.getPdfReport().getStatus());
-        assertEquals("excel-file-1", entity.getExcelReport().getFileId());
-        assertEquals("pdf-file-1", entity.getPdfReport().getFileId());
+        assertEquals(ReportStatus.COMPLETED, entity.getImageReport().getStatus());
+        assertEquals("image-file-1", entity.getImageReport().getFileId());
         verify(restTemplate).postForEntity(eq(EXCEL_URL), any(), eq(ExcelResponse.class));
         verify(restTemplate).postForEntity(eq(PDF_URL), any(), eq(PDFResponse.class));
+        verify(restTemplate).postForEntity(eq(IMAGE_URL), any(), eq(ImageResponse.class));
         verify(emailService, times(1)).sendEmail(eq(RECIPIENT), eq(EmailType.SUCCESS), eq("Austin"));
     }
 
     @Test
     public void syncPdfFailureMarksLegFailedAndSendsFailureEmail() {
         stubExcelSuccess();
+        stubImageSuccess();
         when(restTemplate.postForEntity(eq(PDF_URL), any(), eq(PDFResponse.class)))
                 .thenThrow(new RestClientException("pdf service down"));
         ReportRequest request = sampleRequest();
@@ -140,6 +165,7 @@ public class ReportServiceImplTest {
 
         ReportRequestEntity entity = store.get(request.getReqId());
         assertEquals(ReportStatus.COMPLETED, entity.getExcelReport().getStatus());
+        assertEquals(ReportStatus.COMPLETED, entity.getImageReport().getStatus());
         assertEquals(ReportStatus.FAILED, entity.getPdfReport().getStatus());
         verify(emailService, times(1)).sendEmail(eq(RECIPIENT), eq(EmailType.FAILURE), eq("Austin"));
         verify(emailService, never()).sendEmail(any(), eq(EmailType.SUCCESS), any());
@@ -155,29 +181,26 @@ public class ReportServiceImplTest {
         ReportRequestEntity entity = store.get(request.getReqId());
         assertEquals(ReportStatus.PENDING, entity.getExcelReport().getStatus());
         assertEquals(ReportStatus.PENDING, entity.getPdfReport().getStatus());
+        assertEquals(ReportStatus.PENDING, entity.getImageReport().getStatus());
         verify(emailService, never()).sendEmail(any(), any(), any());
     }
 
     @Test
-    public void emailIsSentOnceAndOnlyAfterBothLegsComplete() {
+    public void emailIsSentOnceAndOnlyAfterAllThreeLegsComplete() {
         ReportRequest request = sampleRequest();
         service.generateReportsAsync(request);
         String reqId = request.getReqId();
 
-        SqsResponse excelResponse = new SqsResponse();
-        excelResponse.setReqId(reqId);
-        excelResponse.setFileId("excel-file-1");
-        service.updateAsyncExcelReport(excelResponse);
+        service.updateAsyncExcelReport(sqs(reqId, "excel-file-1"));
+        service.updateAsyncPDFReport(sqs(reqId, "pdf-file-1"));
+        // two of three legs done -> still no email
         verify(emailService, never()).sendEmail(any(), any(), any());
 
-        SqsResponse pdfResponse = new SqsResponse();
-        pdfResponse.setReqId(reqId);
-        pdfResponse.setFileId("pdf-file-1");
-        service.updateAsyncPDFReport(pdfResponse);
+        service.updateAsyncImageReport(sqs(reqId, "image-file-1"));
         verify(emailService, times(1)).sendEmail(eq(RECIPIENT), eq(EmailType.SUCCESS), eq("Austin"));
 
         // duplicate SQS delivery must not trigger a second email
-        service.updateAsyncPDFReport(pdfResponse);
+        service.updateAsyncImageReport(sqs(reqId, "image-file-1"));
         verify(emailService, times(1)).sendEmail(any(), any(), any());
     }
 
@@ -191,11 +214,8 @@ public class ReportServiceImplTest {
         excelResponse.setReqId(reqId);
         excelResponse.setFailed(true);
         service.updateAsyncExcelReport(excelResponse);
-
-        SqsResponse pdfResponse = new SqsResponse();
-        pdfResponse.setReqId(reqId);
-        pdfResponse.setFileId("pdf-file-1");
-        service.updateAsyncPDFReport(pdfResponse);
+        service.updateAsyncPDFReport(sqs(reqId, "pdf-file-1"));
+        service.updateAsyncImageReport(sqs(reqId, "image-file-1"));
 
         assertEquals(ReportStatus.FAILED, store.get(reqId).getExcelReport().getStatus());
         verify(emailService, times(1)).sendEmail(eq(RECIPIENT), eq(EmailType.FAILURE), eq("Austin"));

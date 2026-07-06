@@ -12,6 +12,7 @@
     <modules>
         <module>ExcelService</module>
         <module>PDFService</module>
+        <module>ImageService</module>
         <module>ClientService</module>
     </modules>
 

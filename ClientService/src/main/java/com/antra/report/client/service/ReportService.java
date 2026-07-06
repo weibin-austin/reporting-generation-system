@@ -17,6 +17,8 @@ public interface ReportService {
 
     void updateAsyncExcelReport(SqsResponse response);
 
+    void updateAsyncImageReport(SqsResponse response);
+
     List<ReportVO> getReportList();
 
     InputStream getFileBodyByReqId(String reqId, FileType type);

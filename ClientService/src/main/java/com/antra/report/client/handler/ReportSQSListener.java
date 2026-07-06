@@ -33,6 +33,12 @@ public class ReportSQSListener {
         reportService.updateAsyncExcelReport(response);
     }
 
+    @SqsListener(value = "Image_Response_Queue", deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
+    public void responseQueueListenerImage(SqsResponse response) {
+        log.info("Get response from sqs : {}", response);
+        reportService.updateAsyncImageReport(response);
+    }
+
 //    @SqsListener(value = "Excel_Response_Queue", deletionPolicy = SqsMessageDeletionPolicy.NEVER)
 //    public void responseQueueListenerExcelManualAcknowledge(SqsResponse response, Acknowledgment ack) {
 //        log.info("Get response from sqs : {}", response);
