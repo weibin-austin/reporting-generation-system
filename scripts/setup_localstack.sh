@@ -36,6 +36,12 @@ done
 echo "Creating S3 bucket"
 awsq s3 mb "s3://reporting-generated-file" 2>/dev/null || true
 
+echo "Creating DynamoDB table PDFFile"
+awsq dynamodb create-table --table-name PDFFile \
+  --attribute-definitions AttributeName=id,AttributeType=S \
+  --key-schema AttributeName=id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST > /dev/null 2>&1 || true
+
 echo "Subscribing request queues to the topic"
 for q in Excel_Request_Queue PDF_Request_Queue; do
   awsq sns subscribe \
