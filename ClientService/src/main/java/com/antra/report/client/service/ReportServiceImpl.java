@@ -268,11 +268,12 @@ public class ReportServiceImpl implements ReportService {
     public void deleteReport(String reqId) {
         ReportRequestEntity entity = reportRequestRepo.findById(reqId).orElseThrow(RequestNotFoundException::new);
         // Best-effort cleanup: each owning service removes its own file + metadata
-        // (PDF -> S3 + DynamoDB, Excel -> disk + its store). A failure here (e.g. a
-        // downstream service being down) must not block removing the report record.
+        // (PDF/Image -> S3 + DynamoDB, Excel -> disk + its store). A failure here
+        // (e.g. a downstream service being down) must not block removing the record.
         delete(entity.getPdfReport() == null ? null : entity.getPdfReport().getFileId(), pdfServiceUrl, "PDF", reqId);
         delete(entity.getExcelReport() == null ? null : entity.getExcelReport().getFileId(), excelServiceUrl, "Excel", reqId);
-        reportRequestRepo.delete(entity); // cascade removes the pdf/excel child rows
+        delete(entity.getImageReport() == null ? null : entity.getImageReport().getFileId(), imageServiceUrl, "Image", reqId);
+        reportRequestRepo.delete(entity); // cascade removes the pdf/excel/image child rows
         log.info("Deleted report {}", reqId);
     }
 

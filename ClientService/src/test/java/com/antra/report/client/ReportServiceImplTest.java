@@ -266,12 +266,18 @@ public class ReportServiceImplTest {
         pdf.setFileId("pdf-file-1");
         pdf.setFileLocation("reporting-generated-file/pdf-file-1");
         service.updateAsyncPDFReport(pdf);
+        SqsResponse image = new SqsResponse();
+        image.setReqId(reqId);
+        image.setFileId("image-file-1");
+        image.setFileLocation("reporting-generated-file/image-file-1");
+        service.updateAsyncImageReport(image);
 
         service.deleteReport(reqId);
 
         // each owning service is asked to delete its own file + metadata
         verify(restTemplate).delete(eq(PDF_URL + "/{id}"), eq("pdf-file-1"));
         verify(restTemplate).delete(eq(EXCEL_URL + "/{id}"), eq("excel-file-1"));
+        verify(restTemplate).delete(eq(IMAGE_URL + "/{id}"), eq("image-file-1"));
         verify(reportRequestRepo).delete(store.get(reqId));
     }
 
