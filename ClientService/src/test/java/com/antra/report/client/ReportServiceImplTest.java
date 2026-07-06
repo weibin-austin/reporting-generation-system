@@ -9,6 +9,7 @@ import com.antra.report.client.pojo.reponse.ExcelResponse;
 import com.antra.report.client.pojo.reponse.PDFResponse;
 import com.antra.report.client.pojo.reponse.SqsResponse;
 import com.antra.report.client.pojo.request.ReportRequest;
+import com.antra.report.client.pojo.request.UpdateReportRequest;
 import com.antra.report.client.repository.ReportRequestRepo;
 import com.antra.report.client.service.EmailService;
 import com.antra.report.client.service.ReportServiceImpl;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -207,5 +209,73 @@ public class ReportServiceImplTest {
         SqsResponse response = new SqsResponse();
         response.setReqId("does-not-exist");
         assertThrows(RequestNotFoundException.class, () -> service.updateAsyncPDFReport(response));
+    }
+
+    @Test
+    public void updateReportChangesDescription() {
+        ReportRequest request = sampleRequest();
+        service.generateReportsAsync(request);
+        String reqId = request.getReqId();
+
+        UpdateReportRequest update = new UpdateReportRequest();
+        update.setDescription("Revised description");
+        service.updateReport(reqId, update);
+
+        assertEquals("Revised description", store.get(reqId).getDescription());
+    }
+
+    @Test
+    public void updateReportForUnknownRequestThrows() {
+        UpdateReportRequest update = new UpdateReportRequest();
+        update.setDescription("x");
+        assertThrows(RequestNotFoundException.class, () -> service.updateReport("nope", update));
+    }
+
+    @Test
+    public void deleteReportRemovesRecordAndCleansUpFiles() {
+        ReportRequest request = sampleRequest();
+        service.generateReportsAsync(request);
+        String reqId = request.getReqId();
+        // simulate both legs completed with real file locations
+        SqsResponse excel = new SqsResponse();
+        excel.setReqId(reqId);
+        excel.setFileId("excel-file-1");
+        service.updateAsyncExcelReport(excel);
+        SqsResponse pdf = new SqsResponse();
+        pdf.setReqId(reqId);
+        pdf.setFileId("pdf-file-1");
+        pdf.setFileLocation("reporting-generated-file/pdf-file-1");
+        service.updateAsyncPDFReport(pdf);
+
+        service.deleteReport(reqId);
+
+        // each owning service is asked to delete its own file + metadata
+        verify(restTemplate).delete(eq(PDF_URL + "/{id}"), eq("pdf-file-1"));
+        verify(restTemplate).delete(eq(EXCEL_URL + "/{id}"), eq("excel-file-1"));
+        verify(reportRequestRepo).delete(store.get(reqId));
+    }
+
+    @Test
+    public void deleteStillRemovesRecordWhenFileCleanupFails() {
+        ReportRequest request = sampleRequest();
+        service.generateReportsAsync(request);
+        String reqId = request.getReqId();
+        SqsResponse pdf = new SqsResponse();
+        pdf.setReqId(reqId);
+        pdf.setFileId("pdf-file-1");
+        pdf.setFileLocation("reporting-generated-file/pdf-file-1");
+        service.updateAsyncPDFReport(pdf);
+        // downstream delete blows up; the record must still be removed
+        doThrow(new RestClientException("pdf service down"))
+                .when(restTemplate).delete(anyString(), anyString());
+
+        service.deleteReport(reqId);
+
+        verify(reportRequestRepo).delete(store.get(reqId));
+    }
+
+    @Test
+    public void deleteReportForUnknownRequestThrows() {
+        assertThrows(RequestNotFoundException.class, () -> service.deleteReport("nope"));
     }
 }

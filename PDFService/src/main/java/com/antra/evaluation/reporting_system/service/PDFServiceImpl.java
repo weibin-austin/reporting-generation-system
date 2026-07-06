@@ -61,4 +61,17 @@ public class PDFServiceImpl implements PDFService {
         return file;
     }
 
+    @Override
+    public void deletePDF(String id) {
+        // Idempotent: nothing to do if the metadata is already gone.
+        repository.findById(id).ifPresent(file -> {
+            String[] parts = file.getFileLocation().split("/", 2); // "bucket/key"
+            if (parts.length == 2) {
+                s3Client.deleteObject(parts[0], parts[1]);
+            }
+            repository.delete(file);
+            log.debug("Deleted PDF {} and its S3 object", id);
+        });
+    }
+
 }

@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,6 +48,13 @@ public class PDFGenerationController {
             log.error("Error in generating pdf", e);
         }
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @DeleteMapping("/pdf/{id}")
+    public ResponseEntity<Void> deletePDF(@PathVariable String id) {
+        log.info("Got request to delete PDF: {}", id);
+        pdfService.deletePDF(id);
+        return ResponseEntity.ok().build();
     }
 
 }

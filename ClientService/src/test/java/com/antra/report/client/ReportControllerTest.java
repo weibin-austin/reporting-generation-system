@@ -13,9 +13,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -70,5 +75,29 @@ public class ReportControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"description\":\"d\",\"headers\":[\"A\"],\"data\":[[\"1\"]],\"submitter\":\"Austin\"}"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    public void updateReportDelegatesToService() throws Exception {
+        mockMvc.perform(put("/report/Req-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"new desc\"}"))
+                .andExpect(status().isOk());
+        verify(reportService).updateReport(eq("Req-1"), any());
+    }
+
+    @Test
+    public void updateWithBlankDescriptionIsRejected() throws Exception {
+        mockMvc.perform(put("/report/Req-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void deleteReportDelegatesToService() throws Exception {
+        mockMvc.perform(delete("/report/Req-1"))
+                .andExpect(status().isOk());
+        verify(reportService).deleteReport("Req-1");
     }
 }

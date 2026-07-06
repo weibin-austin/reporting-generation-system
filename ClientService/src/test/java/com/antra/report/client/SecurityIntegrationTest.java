@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -26,6 +27,12 @@ public class SecurityIntegrationTest {
     @Test
     public void reportApiRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/report"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    public void deleteReportRequiresAuthentication() throws Exception {
+        mockMvc.perform(delete("/report/Req-1"))
                 .andExpect(status().isUnauthorized());
     }
 

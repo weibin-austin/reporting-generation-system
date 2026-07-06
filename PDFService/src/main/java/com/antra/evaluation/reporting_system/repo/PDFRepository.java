@@ -27,4 +27,8 @@ public class PDFRepository {
     public Optional<PDFFile> findById(String id) {
         return Optional.ofNullable(dynamoDBMapper.load(PDFFile.class, id));
     }
+
+    public void delete(PDFFile file) {
+        dynamoDBMapper.delete(file);
+    }
 }
