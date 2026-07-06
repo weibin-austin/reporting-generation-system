@@ -9,3 +9,8 @@
 # Runtime artifacts: service logs and Excel files generated into the working directory
 *.log
 *.xlsx
+
+# Rotated logs (Boot 2.7 logback), temp files, macOS cruft
+*.log.*
+*.tmp
+.DS_Store

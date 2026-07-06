@@ -3,7 +3,7 @@ package com.antra.report.client;
 import com.amazonaws.services.sqs.AmazonSQSAsync;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.cloud.aws.messaging.core.QueueMessagingTemplate;
+import io.awspring.cloud.messaging.core.QueueMessagingTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
 

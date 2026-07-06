@@ -4,7 +4,7 @@ import com.amazonaws.services.sns.AmazonSNS;
 import com.antra.report.client.pojo.request.ReportRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.aws.messaging.core.NotificationMessagingTemplate;
+import io.awspring.cloud.messaging.core.NotificationMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
