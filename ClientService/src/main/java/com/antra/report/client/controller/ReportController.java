@@ -4,6 +4,7 @@ import com.antra.report.client.pojo.FileType;
 import com.antra.report.client.pojo.reponse.ErrorResponse;
 import com.antra.report.client.pojo.reponse.GeneralResponse;
 import com.antra.report.client.pojo.request.ReportRequest;
+import com.antra.report.client.pojo.request.UpdateReportRequest;
 import com.antra.report.client.service.ReportService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,8 +74,19 @@ public class ReportController {
         log.debug("Downloaded File:{}", reqId);
     }
 
-//   @DeleteMapping
-//   @PutMapping
+    @PutMapping("/report/{reqId}")
+    public ResponseEntity<GeneralResponse> updateReport(@PathVariable String reqId,
+                                                        @RequestBody @Validated UpdateReportRequest request) {
+        log.info("Got Request to update report {}: {}", reqId, request);
+        return ResponseEntity.ok(new GeneralResponse(reportService.updateReport(reqId, request)));
+    }
+
+    @DeleteMapping("/report/{reqId}")
+    public ResponseEntity<GeneralResponse> deleteReport(@PathVariable String reqId) {
+        log.info("Got Request to delete report {}", reqId);
+        reportService.deleteReport(reqId);
+        return ResponseEntity.ok(new GeneralResponse());
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<GeneralResponse> handleValidationException(MethodArgumentNotValidException e) {

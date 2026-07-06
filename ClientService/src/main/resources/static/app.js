@@ -61,7 +61,7 @@ function loadAll() {
                     ).append(
                         $('<td>').append(report.excelReportStatus)
                     ).append(
-                        "<td>" + actionLinks(report.pdfReportStatus, report.excelReportStatus, report.id) + "</td>"
+                        "<td>" + actionLinks(report.pdfReportStatus, report.excelReportStatus, report.id, report.description) + "</td>"
                     )
                 );
             });
@@ -116,12 +116,41 @@ function downloadFile(urlToSend) {
 }
 function showDelete(reqId){
     if(confirm("Are you sure to delete report?")){
-        //alert('Not implemented');
+        $.ajax({
+            url: '/report/' + reqId,
+            type: 'DELETE',
+            headers: authHeader(),
+            success: function () { loadAll(); },
+            error: function (jqXHR) {
+                if (jqXHR.status === 401) { logout(); return; }
+                alert('Error deleting report');
+            }
+        });
     }
 }
-function actionLinks(ps, es, id) {
+function editReport(reqId, currentDescription){
+    var description = prompt("New description:", decodeURIComponent(currentDescription));
+    if (description === null || description.trim() === "") {
+        return;
+    }
+    $.ajax({
+        url: '/report/' + reqId,
+        type: 'PUT',
+        headers: authHeader(),
+        data: JSON.stringify({ description: description }),
+        contentType: 'application/json',
+        dataType: 'json',
+        success: function () { loadAll(); },
+        error: function (jqXHR) {
+            if (jqXHR.status === 401) { logout(); return; }
+            alert('Error updating report');
+        }
+    });
+}
+function actionLinks(ps, es, id, description) {
     return (ps === 'COMPLETED'?"<a onclick='downloadPDF(\""+id+"\")' href='#'>Download PDF</a>":"")
         + (es === 'COMPLETED'?"<a onclick='downloadExcel(\""+id+"\")' style='margin-left: 1em' href='#'>Download Excel</a>":"")
+        +"<a onclick='editReport(\""+id+"\", \""+encodeURIComponent(description)+"\")' style='margin-left: 1em' href='#'>Edit</a>"
         +"<a onclick='showDelete(\""+id+"\")' style='margin-left: 1em' href='#'>Delete</a>";
 }
 function validateInput(){

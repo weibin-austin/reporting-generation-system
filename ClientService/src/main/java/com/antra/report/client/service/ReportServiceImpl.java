@@ -13,6 +13,7 @@ import com.antra.report.client.pojo.reponse.PDFResponse;
 import com.antra.report.client.pojo.reponse.ReportVO;
 import com.antra.report.client.pojo.reponse.SqsResponse;
 import com.antra.report.client.pojo.request.ReportRequest;
+import com.antra.report.client.pojo.request.UpdateReportRequest;
 import com.antra.report.client.repository.ReportRequestRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -206,6 +207,37 @@ public class ReportServiceImpl implements ReportService {
     @Transactional(readOnly = true)
     public List<ReportVO> getReportList() {
         return reportRequestRepo.findAll().stream().map(ReportVO::new).collect(Collectors.toList());
+    }
+
+    @Override
+    public ReportVO updateReport(String reqId, UpdateReportRequest request) {
+        ReportRequestEntity entity = reportRequestRepo.findById(reqId).orElseThrow(RequestNotFoundException::new);
+        entity.setDescription(request.getDescription());
+        entity.setUpdatedTime(LocalDateTime.now());
+        return new ReportVO(reportRequestRepo.save(entity));
+    }
+
+    @Override
+    public void deleteReport(String reqId) {
+        ReportRequestEntity entity = reportRequestRepo.findById(reqId).orElseThrow(RequestNotFoundException::new);
+        // Best-effort cleanup: each owning service removes its own file + metadata
+        // (PDF -> S3 + DynamoDB, Excel -> disk + its store). A failure here (e.g. a
+        // downstream service being down) must not block removing the report record.
+        delete(entity.getPdfReport() == null ? null : entity.getPdfReport().getFileId(), pdfServiceUrl, "PDF", reqId);
+        delete(entity.getExcelReport() == null ? null : entity.getExcelReport().getFileId(), excelServiceUrl, "Excel", reqId);
+        reportRequestRepo.delete(entity); // cascade removes the pdf/excel child rows
+        log.info("Deleted report {}", reqId);
+    }
+
+    private void delete(String fileId, String serviceUrl, String label, String reqId) {
+        if (fileId == null) {
+            return;
+        }
+        try {
+            restTemplate.delete(serviceUrl + "/{id}", fileId);
+        } catch (Exception e) {
+            log.error("Failed to delete {} file for {}", label, reqId, e);
+        }
     }
 
     @Override

@@ -15,13 +15,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,5 +63,30 @@ public class PDFServiceImplTest {
         verify(s3Client).putObject(eq("test-bucket"), eq(result.getId()), any(File.class));
         verify(repository).save(result);
         assertFalse(temp.exists());
+    }
+
+    @Test
+    public void deletePdfRemovesS3ObjectAndMetadata() {
+        PDFServiceImpl service = new PDFServiceImpl(repository, generator, s3Client);
+        PDFFile file = new PDFFile();
+        file.setId("File-1");
+        file.setFileLocation("reporting-generated-file/File-1");
+        when(repository.findById("File-1")).thenReturn(Optional.of(file));
+
+        service.deletePDF("File-1");
+
+        verify(s3Client).deleteObject("reporting-generated-file", "File-1");
+        verify(repository).delete(file);
+    }
+
+    @Test
+    public void deletePdfIsNoOpWhenMetadataMissing() {
+        PDFServiceImpl service = new PDFServiceImpl(repository, generator, s3Client);
+        when(repository.findById("nope")).thenReturn(Optional.empty());
+
+        service.deletePDF("nope");
+
+        verifyNoInteractions(s3Client);
+        verify(repository, never()).delete(any());
     }
 }

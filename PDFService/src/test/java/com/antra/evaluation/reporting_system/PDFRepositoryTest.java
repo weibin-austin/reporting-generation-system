@@ -55,4 +55,15 @@ public class PDFRepositoryTest {
 
         assertFalse(repository.findById("nope").isPresent());
     }
+
+    @Test
+    public void deletePassesEntityToMapper() {
+        PDFRepository repository = new PDFRepository(dynamoDBMapper);
+        PDFFile file = new PDFFile();
+        file.setId("File-1");
+
+        repository.delete(file);
+
+        verify(dynamoDBMapper).delete(file);
+    }
 }
