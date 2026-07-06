@@ -2,6 +2,7 @@
 /ClientService/target/
 /ExcelService/target/
 /PDFService/target/
+/ImageService/target/
 
 # IDE
 .idea/
