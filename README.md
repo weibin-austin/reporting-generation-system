@@ -11,8 +11,8 @@ Four Spring Boot services coordinate over AWS SNS/SQS/S3 and DynamoDB:
 
 | Service | Port | Responsibility | Storage |
 | --- | --- | --- | --- |
-| **ClientService** | 8080 | Public API + web UI, orchestration, report tracking, email notifications | H2 (report metadata) |
-| **ExcelService** | 8888 | Generates `.xlsx` (Apache POI) | H2 metadata + local file |
+| **ClientService** | 8080 | Public API + web UI, orchestration, report tracking, email notifications | PostgreSQL (report metadata) |
+| **ExcelService** | 8888 | Generates `.xlsx` (Apache POI) | PostgreSQL metadata + local file |
 | **PDFService** | 9999 | Generates PDF (JasperReports) | S3 + DynamoDB (`PDFFile`) |
 | **ImageService** | 7777 | Renders a PNG table image (Java2D) | S3 + DynamoDB (`ImageFile`) |
 
@@ -42,14 +42,14 @@ original high-level diagram.
 - AWS SDK v1 (S3, DynamoDB via `DynamoDBMapper`)
 - Apache POI (Excel), JasperReports (PDF), Java2D/ImageIO (PNG)
 - Spring Security + JWT (`jjwt`) on the ClientService API
-- H2 (ClientService + ExcelService), DynamoDB (PDF + Image metadata)
+- PostgreSQL (ClientService + ExcelService; in-memory H2 for the test suite), DynamoDB (PDF + Image metadata)
 - React 18 + Vite web UI
 - JUnit 5 + Mockito; k6 for load testing; GitHub Actions CI
 
 ## Running locally
 
-Everything runs against **LocalStack** — no real AWS account required. All services
-use the `local` Spring profile.
+Everything runs against **LocalStack** (AWS) and a local **PostgreSQL** — no real AWS
+account required. All services use the `local` Spring profile.
 
 ### 1. Start LocalStack and provision resources
 
@@ -62,13 +62,28 @@ docker run -d --name reporting-localstack -p 4566:4566 localstack/localstack:4.0
 AWS_ENDPOINT=http://localhost:4566 ./scripts/setup_localstack.sh
 ```
 
-### 2. Build
+### 2. Start PostgreSQL
+
+ClientService and ExcelService store metadata in PostgreSQL. Connection settings are
+overridable via `DB_URL` / `DB_USERNAME` / `DB_PASSWORD`; the defaults expect a server
+on `localhost:5432` with the `report` and `excel_service` databases:
+
+```bash
+docker run -d --name reporting-postgres -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=report -p 5432:5432 postgres:16
+docker exec reporting-postgres psql -U postgres -c "CREATE DATABASE excel_service;"
+```
+
+Schemas are created automatically on startup (Hibernate `ddl-auto=update`). The test
+suite uses in-memory H2, so `mvn test` and CI need no database server.
+
+### 3. Build
 
 ```bash
 mvn clean package
 ```
 
-### 3. Start the services (each with the local profile)
+### 4. Start the services (each with the local profile)
 
 ```bash
 java -jar ExcelService/target/reporting.jar  --spring.profiles.active=local   # :8888
@@ -81,7 +96,7 @@ java -jar ClientService/target/main.jar      --spring.profiles.active=local   # 
 > `--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang.invoke=ALL-UNNAMED`.
 > The DynamoDB tables are auto-created on startup if missing.
 
-### 4. Web UI
+### 5. Web UI
 
 ```bash
 cd web
@@ -140,7 +155,7 @@ them have been implemented:
 
 - [x] **0.** Update / delete report APIs (`PUT` / `DELETE /report/{reqId}`), with the UI wired up
 - [x] **1.** Concurrent sync API — the three workers are called in parallel (`CompletableFuture`)
-- [x] **2.** Database instead of the in-memory hashmap in `ExcelRepositoryImpl` (Spring Data JPA + H2)
+- [x] **2.** Database instead of the in-memory hashmap in `ExcelRepositoryImpl` (Spring Data JPA + PostgreSQL)
 - [x] **3.** Expanded test coverage across all modules
 - [x] **5.** Pressure/benchmark tests (k6)
 - [x] **6.** MongoDB → DynamoDB for PDF (and Image) metadata
